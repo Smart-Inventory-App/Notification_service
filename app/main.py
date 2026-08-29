@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import Base, engine
-from app.models import user  # noqa: F401 — registra modelos
 from app.routes.notification import router
 
 Base.metadata.create_all(bind=engine)
