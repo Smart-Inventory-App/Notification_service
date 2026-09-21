@@ -1,10 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.database import Base, engine
 from app.routes.notification import router
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Notification Service", version="1.0.0")
 
