@@ -2,8 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://user:password@db:5432/tpp_db"
-    JWT_SECRET: str = "change-this-secret-in-production"
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
 
     SMTP_HOST: str = ""
