@@ -92,4 +92,7 @@ def test_send_notification_success():
         assert response.status_code == 200
         assert response.json() == {"message": "Notification sent successfully"}
         mock_push.assert_called_once_with("fake_token", "Prueba", "Mensaje de prueba")
-        mock_email.assert_called_once_with("dest@test.com", "Prueba", "Mensaje de prueba")
+        mock_email.assert_called_once_with(
+            "dest@test.com", "Prueba", "Mensaje de prueba",
+            kind=None, product_name=None, days=None, units=None,
+        )
