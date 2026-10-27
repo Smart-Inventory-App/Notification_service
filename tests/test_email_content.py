@@ -47,10 +47,70 @@ def test_el_mail_trae_texto_plano_y_html():
     assert set(contenido) == {"text/plain", "text/html"}
 
 
+AVISO = (
+    "Recibís este mail porque tenés las notificaciones activadas. Si querés dejar de recibir estos mails, "
+    "ingresa a la aplicación y desactiva las notificaciones."
+)
+
+
 def test_el_pie_explica_por_que_llega_y_como_desactivarlo():
     texto, html = build_email("T", "B")
-    assert "notificaciones activadas" in texto
-    assert "Perfil" in html
+    assert AVISO in texto
+    assert AVISO in html
+
+
+@pytest.mark.parametrize("kind", list(KINDS) + [None, "otra-cosa"])
+def test_todos_los_mails_de_alerta_llevan_el_aviso_de_las_notificaciones(kind):
+    texto, html = build_email("T", "B", kind=kind, product_name="Leche", days=3, units=2)
+    assert AVISO in texto
+    assert AVISO in html
+    assert "Podés cambiarlo desde Perfil" not in texto
+
+
+PREDICEN = ["low_coverage", "overstock", "understock", "slow_pace"]
+
+
+@pytest.mark.parametrize("kind", PREDICEN)
+def test_los_avisos_que_estiman_algo_explican_como_lo_calculan(kind):
+    texto, html = build_email("T", "B", kind=kind, product_name="Leche", days=3, units=2)
+    prediccion = KINDS[kind]["prediction"]
+    assert "Cómo lo calculamos" in texto and "Cómo lo calculamos" in html
+    assert prediccion in texto and prediccion in html
+    assert texto.index("Cómo lo calculamos") > texto.index("Qué podés hacer")
+    assert html.index("Cómo lo calculamos") > html.index("Qué podés hacer")
+
+
+@pytest.mark.parametrize("kind", list(KINDS) + [None, "otra-cosa"])
+def test_el_aviso_de_las_notificaciones_es_lo_ultimo_del_mail_y_en_letra_chica(kind):
+    texto, html = build_email("T", "B", kind=kind, product_name="Leche", days=3, units=2)
+    assert texto.rstrip().endswith(AVISO)
+    # en el HTML, el último párrafo es la aclaración, con letra más chica que el resto
+    ultimo = html[html.rindex("<p "):]
+    assert AVISO in ultimo
+    assert "font-size: 11px" in ultimo
+    assert html.rindex("font-size: 11px") > html.rindex("Cómo lo calculamos") if "Cómo lo calculamos" in html else True
+
+
+def test_la_aclaracion_es_mas_chica_que_el_resto_del_texto_secundario():
+    _, html = build_email("T", "B", kind="low_coverage", product_name="Leche", days=3)
+    assert html.count("font-size: 11px") == 1
+    assert "Podés cambiarlo desde Perfil" not in html
+    assert "vía mail" not in html
+
+
+@pytest.mark.parametrize("kind", PREDICEN)
+def test_la_explicacion_es_breve_y_sin_tecnicismos(kind):
+    prediccion = KINDS[kind]["prediction"]
+    assert len(prediccion) < 400
+    for tecnico in ("modelo", "algoritmo", "machine", "regresión", "predicción", "ML"):
+        assert tecnico.lower() not in prediccion.lower()
+
+
+@pytest.mark.parametrize("kind", [None, "expiry", "otra-cosa"])
+def test_los_avisos_que_no_estiman_nada_no_llevan_la_explicacion(kind):
+    texto, html = build_email("T", "B", kind=kind, product_name="Leche", days=3)
+    assert "Cómo lo calculamos" not in texto
+    assert "Cómo lo calculamos" not in html
 
 
 # ── mails descriptivos por tipo ──────────────────────────────────────────────
