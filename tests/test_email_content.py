@@ -138,7 +138,9 @@ def test_los_datos_del_aviso_se_muestran_en_lista():
 def test_los_dias_se_pluralizan():
     assert "3 días" in build_email("T", "B", kind="expiry", days=3)[0]
     assert "1 día" in build_email("T", "B", kind="expiry", days=1)[0]
-    assert "0 días" in build_email("T", "B", kind="expiry", days=0)[0]
+    # nunca «0 días»: el mismo día se dice «hoy»
+    assert "0 días" not in build_email("T", "B", kind="expiry", days=0)[0]
+    assert "Vence en: hoy" in build_email("T", "B", kind="expiry", days=0)[0]
 
 
 def test_slow_pace_muestra_las_unidades_en_riesgo():
@@ -216,8 +218,19 @@ def test_el_endpoint_pasa_los_datos_extra_al_mail():
         assert client.post("/notification/send_notification", json=payload).status_code == 200
     mail.assert_called_once_with(
         "dest@test.com", "Producto próximo a vencerse", "Leche vence en 2 días.",
-        kind="expiry", product_name="Leche", days=2, units=None,
+        kind="expiry", product_name="Leche", days=2, units=None, limit_days=None, daily_rate=None,
     )
+
+
+def test_el_endpoint_pasa_la_regla_y_el_consumo_al_mail():
+    payload = {
+        "token": "t", "title": "T", "body": "B", "email": "dest@test.com",
+        "kind": "understock", "product_name": "Fideos", "days": 3, "limit_days": 7, "daily_rate": 1.5,
+    }
+    with patch("app.routes.notification.send_push"), patch("app.routes.notification.send_email") as mail:
+        assert client.post("/notification/send_notification", json=payload).status_code == 200
+    assert mail.call_args.kwargs["limit_days"] == 7
+    assert mail.call_args.kwargs["daily_rate"] == 1.5
 
 
 def test_un_tipo_desconocido_no_impide_el_push_ni_el_mail():
@@ -235,3 +248,61 @@ def test_los_dias_con_decimales_se_redondean_en_vez_de_rechazar_el_pedido():
         assert client.post("/notification/send_notification", json=payload).status_code == 200
     assert mail.call_args.kwargs["days"] == 3
     assert mail.call_args.kwargs["units"] == 3
+
+
+# ── los números reales del aviso ─────────────────────────────────────────────
+
+def test_el_aviso_de_stock_explica_con_la_regla_y_el_consumo_del_usuario():
+    texto, html = build_email("T", "B", kind="low_coverage", product_name="Leche", days=3, limit_days=7, daily_rate=2.5)
+    assert "Tu mínimo configurado: 7 días" in texto
+    assert "Consumo estimado: 2.5 unidades por día" in texto
+    assert "Tu mínimo configurado es de 7 días" in texto and "alcanza para 3 días" in texto
+    assert "por debajo de ese mínimo" in texto
+    assert "Tu mínimo configurado: 7 días" in html
+
+
+def test_compraste_de_menos_dice_con_cuanto_se_compara_lo_que_alcanza():
+    texto, _ = build_email("T", "B", kind="understock", product_name="Fideos", days=3, limit_days=7, daily_rate=1.0)
+    assert "alcanza para 3 días" in texto
+    assert "tu mínimo configurado es de 7 días" in texto
+
+
+def test_compraste_de_mas_dice_con_cuanto_se_compara_lo_que_alcanza():
+    texto, _ = build_email("T", "B", kind="overstock", product_name="Arroz", days=90, limit_days=7, daily_rate=0.1)
+    assert "alcanza para 90 días" in texto
+    assert "mucho más que tu mínimo de 7 días" in texto
+
+
+def test_un_stock_que_alcanza_para_menos_de_un_dia_no_dice_cero_dias():
+    texto, _ = build_email("T", "B", kind="low_coverage", product_name="Cafe", days=0, limit_days=7, daily_rate=5)
+    assert "0 días" not in texto
+    assert "menos de 1 día" in texto
+    assert "unas 5 unidades por día" in texto
+
+
+def test_el_aviso_de_vencimiento_dice_la_anticipacion_configurada():
+    texto, _ = build_email("T", "B", kind="expiry", product_name="Yogur", days=2, limit_days=7)
+    assert "Tu aviso de anticipación: 7 días" in texto
+    assert "Configuraste que te avisemos cuando falten 7 días o menos" in texto
+
+
+def test_un_producto_vencido_dice_hace_cuantos_dias():
+    texto, _ = build_email("T", "B", kind="expiry", product_name="Yogur", days=-3)
+    assert "Venció hace: 3 días" in texto
+
+
+def test_sin_la_regla_el_mail_es_el_de_siempre():
+    texto, _ = build_email("T", "B", kind="understock", product_name="Fideos", days=3)
+    assert "Tu mínimo configurado" not in texto
+    assert "Consumo estimado" not in texto
+
+
+def test_el_consumo_se_escribe_legible():
+    assert "Consumo estimado: 12 unidades por día" in build_email("T", "B", kind="low_coverage", days=2, daily_rate=12.4)[0]
+    assert "Consumo estimado: 0.3 unidades por día" in build_email("T", "B", kind="low_coverage", days=2, daily_rate=0.34)[0]
+    assert "Consumo estimado" not in build_email("T", "B", kind="low_coverage", days=2, daily_rate=0)[0]
+
+
+def test_el_ritmo_lento_muestra_la_anticipacion_con_su_nombre():
+    texto, _ = build_email("T", "B", kind="slow_pace", product_name="Pan", days=4, units=5, limit_days=7)
+    assert "Tu aviso de anticipación: 7 días" in texto

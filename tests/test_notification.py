@@ -94,5 +94,5 @@ def test_send_notification_success():
         mock_push.assert_called_once_with("fake_token", "Prueba", "Mensaje de prueba")
         mock_email.assert_called_once_with(
             "dest@test.com", "Prueba", "Mensaje de prueba",
-            kind=None, product_name=None, days=None, units=None,
+            kind=None, product_name=None, days=None, units=None, limit_days=None, daily_rate=None,
         )

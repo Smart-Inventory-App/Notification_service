@@ -14,6 +14,10 @@ class NotificationBase(BaseModel):
     product_name: Optional[str] = None
     days: Optional[int] = None
     units: Optional[int] = None
+    # La regla del usuario con la que se compara (su mínimo de stock o sus días de anticipación) y el consumo diario
+    # estimado: con eso el mail explica el aviso con números reales
+    limit_days: Optional[int] = None
+    daily_rate: Optional[float] = None
 
     @field_validator("days", "units", mode="before")
     @classmethod

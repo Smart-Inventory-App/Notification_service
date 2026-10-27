@@ -110,30 +110,87 @@ def _plural(amount: int, singular: str, plural: str) -> str:
     return f"{amount} {singular if amount == 1 else plural}"
 
 
-def _facts(info, product_name, days, units) -> list[str]:
+def _days_text(days: int) -> str:
+    """Los días como los diría una persona: nunca «0 días»."""
+    return "menos de 1 día" if days <= 0 else _plural(days, "día", "días")
+
+
+def _rate_amount(daily_rate) -> str:
+    """El consumo diario estimado como número legible (un decimal si es chico)."""
+    return f"{daily_rate:.1f}".rstrip("0").rstrip(".") if daily_rate < 10 else str(round(daily_rate))
+
+
+def _rate_text(daily_rate) -> str:
+    """El consumo diario estimado entre paréntesis, solo si llegó y es mayor que cero."""
+    if not daily_rate or daily_rate <= 0:
+        return ""
+    return f" (unas {_rate_amount(daily_rate)} unidades por día)"
+
+
+def _facts(info, product_name, days, units, kind=None, limit_days=None, daily_rate=None) -> list[str]:
     """Datos del aviso en lista, para que se vean de un vistazo (solo los que llegaron)."""
     facts = []
     if product_name:
         facts.append(f"Producto: {product_name}")
     if days is not None:
-        facts.append(f"{info['days_label']}: {_plural(days, 'día', 'días')}")
+        if kind == "expiry" and days < 0:
+            facts.append(f"Venció hace: {_plural(-days, 'día', 'días')}")
+        elif kind == "expiry" and days == 0:
+            facts.append(f"{info['days_label']}: hoy")
+        else:
+            facts.append(f"{info['days_label']}: {_days_text(days)}")
     if units is not None:
         facts.append(f"Unidades en riesgo: {units}")
+    if limit_days is not None:
+        label = "Tu aviso de anticipación" if kind in ("expiry", "slow_pace") else "Tu mínimo configurado"
+        facts.append(f"{label}: {_plural(limit_days, 'día', 'días')}")
+    if daily_rate and daily_rate > 0:
+        facts.append(f"Consumo estimado: {_rate_amount(daily_rate)} unidades por día")
     return facts
 
 
-def build_email(title: str, body: str, kind=None, product_name=None, days=None, units=None) -> tuple[str, str]:
+def _explanation(kind, days, limit_days, daily_rate) -> str:
+    """Lo que dicen los números de este aviso en concreto, para que no quede en una frase general."""
+    if limit_days is None:
+        return ""
+    rate = _rate_text(daily_rate)
+    if kind == "low_coverage" and days is not None:
+        return (
+            f"Tu mínimo configurado es de {_plural(limit_days, 'día', 'días')} y, al ritmo que calculamos{rate}, lo que te "
+            f"queda alcanza para {_days_text(days)}: está por debajo de ese mínimo."
+        )
+    if kind == "understock" and days is not None:
+        return (
+            f"Después de esta compra, lo que tenés alcanza para {_days_text(days)}{rate}, y tu mínimo configurado es de "
+            f"{_plural(limit_days, 'día', 'días')}. Por eso te avisamos que podrías quedarte corto."
+        )
+    if kind == "overstock" and days is not None:
+        return (
+            f"Lo que tenés alcanza para {_days_text(days)}{rate}, mucho más que tu mínimo de "
+            f"{_plural(limit_days, 'día', 'días')}. Por eso te avisamos que podrías haber comprado de más."
+        )
+    if kind == "expiry":
+        return f"Configuraste que te avisemos cuando falten {_plural(limit_days, 'día', 'días')} o menos para el vencimiento."
+    return ""
+
+
+def build_email(
+    title: str, body: str, kind=None, product_name=None, days=None, units=None, limit_days=None, daily_rate=None,
+) -> tuple[str, str]:
     """Texto plano y HTML del mail de una alerta."""
     info = KINDS.get(kind)
     footer = NOTIFICATIONS_NOTE
     prediction = info.get("prediction") if info else None
+    meaning = ""
+    if info:
+        meaning = " ".join(part for part in (info["meaning"], _explanation(kind, days, limit_days, daily_rate)) if part)
 
     text_parts = [title, "", body]
     if info:
-        facts = _facts(info, product_name, days, units)
+        facts = _facts(info, product_name, days, units, kind, limit_days, daily_rate)
         if facts:
             text_parts += ["", *facts]
-        text_parts += ["", "Qué significa:", info["meaning"], "", "Qué podés hacer:"]
+        text_parts += ["", "Qué significa:", meaning, "", "Qué podés hacer:"]
         text_parts += [f"- {action}" for action in info["actions"]]
     # Cómo se estima lo que avisa el mail (solo en los que estiman algo) y, abajo de todo, la aclaración de las notificaciones
     if prediction:
@@ -148,12 +205,12 @@ def build_email(title: str, body: str, kind=None, product_name=None, days=None, 
             f'<span style="display:inline-block;background:{info["color"]};color:#fff;font-size:12px;font-weight:bold;'
             f'padding:3px 10px;border-radius:12px;margin-bottom:10px;">{escape(info["label"])}</span>'
         )
-        facts = _facts(info, product_name, days, units)
+        facts = _facts(info, product_name, days, units, kind, limit_days, daily_rate)
         facts_html = "".join(f'<li>{escape(fact)}</li>' for fact in facts)
         actions_html = "".join(f'<li style="margin-bottom:6px;">{escape(action)}</li>' for action in info["actions"])
         detail = f"""
   {f'<ul style="padding-left:20px;line-height:1.5;">{facts_html}</ul>' if facts else ''}
-  <p style="margin-top:20px;"><strong>Qué significa</strong><br>{escape(info["meaning"])}</p>
+  <p style="margin-top:20px;"><strong>Qué significa</strong><br>{escape(meaning)}</p>
   <p style="margin-top:20px;"><strong>Qué podés hacer</strong></p>
   <ul style="padding-left:20px;line-height:1.5;">{actions_html}</ul>"""
 
@@ -179,13 +236,16 @@ def build_email(title: str, body: str, kind=None, product_name=None, days=None, 
     return text, html
 
 
-def send_email(to_email: str, subject: str, body: str, kind=None, product_name=None, days=None, units=None) -> None:
+def send_email(
+    to_email: str, subject: str, body: str, kind=None, product_name=None, days=None, units=None,
+    limit_days=None, daily_rate=None,
+) -> None:
     if not settings.SMTP_HOST or not settings.SMTP_USER:
         # Sin SMTP no sale ningún mail: se avisa en el log para que no parezca que se envió
         logger.warning("SMTP no configurado (SMTP_HOST / SMTP_USER): no se envió el mail a %s", to_email)
         return
 
-    text, html = build_email(subject, body, kind, product_name, days, units)
+    text, html = build_email(subject, body, kind, product_name, days, units, limit_days, daily_rate)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"{subject} - Smart Inventory"
