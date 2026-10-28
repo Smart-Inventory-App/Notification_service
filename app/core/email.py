@@ -170,7 +170,7 @@ def _explanation(kind, days, limit_days, daily_rate) -> str:
             f"{_plural(limit_days, 'día', 'días')}. Por eso te avisamos que podrías haber comprado de más."
         )
     if kind == "expiry":
-        return f"Configuraste que te avisemos cuando falten {_plural(limit_days, 'día', 'días')} o menos para el vencimiento."
+        return f"Configuraste que te avisemos cuando falten menos de {_plural(limit_days, 'día', 'días')} para el vencimiento."
     return ""
 
 

@@ -283,7 +283,7 @@ def test_un_stock_que_alcanza_para_menos_de_un_dia_no_dice_cero_dias():
 def test_el_aviso_de_vencimiento_dice_la_anticipacion_configurada():
     texto, _ = build_email("T", "B", kind="expiry", product_name="Yogur", days=2, limit_days=7)
     assert "Tu aviso de anticipación: 7 días" in texto
-    assert "Configuraste que te avisemos cuando falten 7 días o menos" in texto
+    assert "Configuraste que te avisemos cuando falten menos de 7 días" in texto
 
 
 def test_un_producto_vencido_dice_hace_cuantos_dias():
