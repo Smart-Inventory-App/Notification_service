@@ -53,6 +53,15 @@ def test_send_push_success():
         assert result == "mock_message_id"
         mock_send.assert_called_once()
 
+def test_send_push_lleva_la_marca_en_android_y_web():
+    with patch("app.core.firebase._get_app", return_value="fake_app"),          patch("app.core.firebase.messaging.send") as mock_send:
+        firebase.send_push("abc123", "Hola", "Mensaje de prueba")
+
+        message = mock_send.call_args.args[0]
+        assert message.android.notification.icon == "notification_icon"
+        assert message.android.notification.color == "#2CC4B4"
+        assert message.webpush.notification.icon == "/notification-icon-192.png"
+
 def test_send_push_failure():
     with patch("app.core.firebase._get_app", return_value="fake_app"), \
          patch("app.core.firebase.messaging.send") as mock_send:
@@ -83,4 +92,7 @@ def test_send_notification_success():
         assert response.status_code == 200
         assert response.json() == {"message": "Notification sent successfully"}
         mock_push.assert_called_once_with("fake_token", "Prueba", "Mensaje de prueba")
-        mock_email.assert_called_once_with("dest@test.com", "Prueba", "Mensaje de prueba")
+        mock_email.assert_called_once_with(
+            "dest@test.com", "Prueba", "Mensaje de prueba",
+            kind=None, product_name=None, days=None, units=None, limit_days=None, daily_rate=None,
+        )
