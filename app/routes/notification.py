@@ -11,6 +11,10 @@ async def send_notification(
         data: NotificationBase
 ):
     send_push(data.token, data.title, data.body)
-    send_email(data.email, data.title, data.body)
+    send_email(
+        data.email, data.title, data.body,
+        kind=data.kind, product_name=data.product_name, days=data.days, units=data.units,
+        limit_days=data.limit_days, daily_rate=data.daily_rate,
+    )
     return {"message": "Notification sent successfully"}
 

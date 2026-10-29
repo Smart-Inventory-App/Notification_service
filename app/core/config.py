@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
+    # URL https pública del logo que va arriba de los mails (vacío = mails sin logo)
+    EMAIL_LOGO_URL: str = ""
 
     FIREBASE_CREDENTIALS: str
 
